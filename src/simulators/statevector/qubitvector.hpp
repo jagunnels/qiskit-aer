@@ -206,6 +206,10 @@ public:
   // The matrix is input as vector of the column-major vectorized N-qubit matrix.
   void apply_matrix(const reg_t &qubits, const cvector_t &mat);
 
+  // Apply a stacked set of 2^control_count target_count--qubit matrix to the state vector.
+  // The matrix is input as vector of the column-major vectorized N-qubit matrix.
+  void apply_multimatrix(const reg_t &qubits, const cvector_t &mat, const size_t target_count, const size_t control_count);
+
   // Apply a 1-qubit diagonal matrix to the state vector.
   // The matrix is input as vector of the matrix diagonal.
   void apply_diagonal_matrix(const uint_t qubit, const cvector_t &mat);
@@ -1210,6 +1214,38 @@ void QubitVector<data_t>::apply_matrix(const reg_t &qubits,
 
   // Use the lambda function
   apply_matrix_lambda(lambda, qubits, mat);
+}
+
+// JAG
+template <typename data_t>
+void QubitVector<data_t>::apply_multimatrix(const reg_t &qubits,
+                                       const cvector_t &mat,
+				       const size_t target_count,
+				       const size_t control_count) {
+  
+  // General implementation
+  const uint_t DIM = BITS[(target_count+control_count)];
+  const uint_t columns = BITS[target_count];
+  const uint_t blocks = BITS[control_count];
+  // Lambda function for stacked matrix multiplication
+  auto lambda = [&](const indexes_t &inds, const cvector_t &_mat)->void {
+    auto cache = std::make_unique<complex_t[]>(DIM);
+    for (size_t i = 0; i < DIM; i++) {
+      const auto ii = inds[i];
+      cache[i] = data_[ii];
+      data_[ii] = 0.;
+    }
+    // update state vector
+    for (size_t b = 0; b < blocks; b++) 
+      for (size_t i = 0; i < columns; i++)
+        for (size_t j = 0; j < columns; j++) 
+	{ 
+	  data_[inds[i+b*columns]] += _mat[i+b*columns + DIM * j] * cache[b*columns+j];
+	}
+  };
+
+  // Use the lambda function
+  apply_matrix_lambda(lambda, qubits, mat); 
 }
 
 template <typename data_t>
