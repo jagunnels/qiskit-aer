@@ -1221,7 +1221,7 @@ void QubitVector<data_t>::apply_multiplexer(const reg_t &qubits,
   };
 
   // Use the lambda function
-  apply_matrix_lambda(lambda, qubits, mat); 
+  apply_lambda(lambda, qubits, mat); 
 }
 
 template <typename data_t>
