@@ -22,7 +22,6 @@
 #include <stdexcept>
 
 #include "framework/json.hpp"
-#include "framework/matrix.hpp" // matrix class (needed for multimatrix) JAG
 
 namespace QV {
 
@@ -33,7 +32,7 @@ using reg_t = std::vector<uint_t>;
 using indexes_t = std::unique_ptr<uint_t[]>;
 using complex_t = std::complex<double>;
 using cvector_t = std::vector<complex_t>;
-using cmatrix_t = matrix<complex_t>; // JAG
+using cmatrix_t = matrix<complex_t>; 
 using rvector_t = std::vector<double>;
 template <size_t N> using areg_t = std::array<uint_t, N>;
 
@@ -245,9 +244,7 @@ public:
 
   // Apply a stacked set of 2^control_count target_count--qubit matrix to the state vector.
   // The matrix is input as vector of the column-major vectorized N-qubit matrix.
-  void apply_multimatrix(const reg_t &qubits, const cvector_t &mat, const size_t target_count, const size_t control_count);
-  // Pre-amble routine: Packs matrices into correct form 
-  void apply_multimatrix(const reg_t &qubits, const std::vector<cmatrix_t> &mmat); 
+  void apply_multiplexer(const reg_t &qubits, const cvector_t &mat, const size_t control_count, const size_t target_count);
 
   // Apply a 1-qubit diagonal matrix to the state vector.
   // The matrix is input as vector of the matrix diagonal.
@@ -1221,67 +1218,11 @@ void QubitVector<data_t>::apply_matrix(const reg_t &qubits,
   apply_matrix_lambda(lambda, qubits, mat);
 }
 
-// JAG 
-template <class statevec_t>
-//void State<statevec_t>::apply_multimatrixNEW(const reg_t &qubits, const std::vector<cmatrix_t> &mmat) {
-void QubitVector<statevec_t>::apply_multimatrix(const reg_t &qubits, const std::vector<cmatrix_t> &mmat) {
-	// Proof-of-concept approach: 
-	// (1) Rearrange qubit indices Identity(target) | Identity(control) ... was control | target
-	// (2) Pack vector of matrices into single (stacked) matrix ... note: matrix dims: rows = DIM[qubit.size()] columns = DIM[|target bits|]
-	// (3) Treat as single, large(r), chained/batched matrix operator
-	
-	
-	// (1) Rearrange qubit indices Identity(target) | Identity(control) ... was control | target
-	size_t exp_target_count, target_count, control_count;
-	double n, base = 2;
-	auto perm_qubits = qubits;
-        exp_target_count = mmat[0].GetRows();
-	n = std::log(exp_target_count)/std::log(base);
-	target_count = std::trunc(n);
-	control_count = qubits.size() - target_count;
-	for(size_t j = 0; j < target_count; j++)
-		perm_qubits[j] = qubits[control_count+j]; // Target at "front"
-	for(size_t j = 0; j < control_count; j++)
-		perm_qubits[j+target_count] = qubits[j]; // Control qubits moved to "end" 
-
-
-	// (2) Pack vector of matrices into single (stacked) matrix ... note: matrix dims: rows = DIM[qubit.size()] columns = DIM[|target bits|]
-	size_t big_dimension = BITS[qubits.size()];
-	size_t small_dimension = BITS[target_count]; // Should equal exp_target_count
-	size_t offset_row = 0, mmat_number = 0;
-        if (small_dimension != exp_target_count) 
-           throw std::invalid_argument("QubitVector::State::apply_multimatrix: target bit count incorrect");
-
-	cmatrix_t whopper(big_dimension, small_dimension); 
-	for(size_t row = 0; row < big_dimension; row++)  
-		for(size_t col = 0; col < small_dimension; col++)
-			whopper(row, col) = {0.0, 0.0};
-        
-	for(size_t current_block = 0; current_block < mmat.size(); current_block++)
-	{
-		for(size_t row = 0; row < exp_target_count; row++)  
-		{
-			for(size_t col = 0; col < exp_target_count; col++)
-			{
-				whopper(offset_row + row, col) = mmat[mmat_number](row, col);
-			}	
-
-		}
-		offset_row+=exp_target_count;
-		mmat_number++;
-	}
-
-	// (3) Treat as single, large(r), chained/batched matrix operator
-	apply_multimatrix(perm_qubits, whopper, target_count, control_count);
-}
-
-
-// JAG
 template <typename data_t>
-void QubitVector<data_t>::apply_multimatrix(const reg_t &qubits,
-                                       const cvector_t &mat,
-				       const size_t target_count,
-				       const size_t control_count) {
+void QubitVector<data_t>::apply_multiplexer(const reg_t &qubits,
+                                       const cvector_t &mat, 
+				       const size_t control_count,
+				       const size_t target_count) {
   
   // General implementation
   const uint_t DIM = BITS[(target_count+control_count)];

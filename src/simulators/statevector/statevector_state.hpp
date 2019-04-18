@@ -67,7 +67,7 @@ public:
       Operations::OpType::bfunc,
       Operations::OpType::roerror,
       Operations::OpType::matrix,
-      Operations::OpType::multiplexer, // JAG
+      Operations::OpType::multiplexer, 
       Operations::OpType::kraus
     });
   }
@@ -162,17 +162,16 @@ protected:
 
   // Apply a matrix to given qubits (identity on all other qubits)
   void apply_matrix(const reg_t &qubits, const cmatrix_t & mat);
- 
-  // JAG 
-  // Apply a stacked (multiplex control) matrix to given qubits (identity on all other qubits)
-  void apply_multimatrix(const reg_t &qubits, const std::vector<cmatrix_t> &mmat);  // Reference ... currently called
 
   // Apply a vectorized matrix to given qubits (identity on all other qubits)
-  void apply_matrix(const reg_t &qubits, const cvector_t & vmat);
-  
-  // JAG: Apply a multiplexer matrix to target qubits (using control qubits to select matrix instance)
-  void apply_multimatrix(const reg_t &qubits, const cmatrix_t &mat, const size_t target_count, const size_t control_count);
-  void apply_multimatrix(const reg_t &qubits, const cvector_t & mmat, const size_t target_count, const size_t control_count); 
+  void apply_matrix(const reg_t &qubits, const cvector_t & vmat); 
+
+  // Apply a vector of control matrices to given qubits (identity on all other qubits)
+  void apply_multiplexer(const reg_t &qubits, const std::vector<cmatrix_t> &mmat); 
+
+  // Apply stacked (flat) version of multiplexer matrix to target qubits (using control qubits to select matrix instance)
+  void apply_multiplexer(const reg_t &qubits, const cmatrix_t &mat);
+
 
   // Apply a Kraus error operation
   void apply_kraus(const reg_t &qubits,
@@ -447,9 +446,8 @@ void State<statevec_t>::apply_ops(const std::vector<Operations::Op> &ops,
       case Operations::OpType::matrix:
         apply_matrix(op.qubits, op.mats[0]);
         break;
-       // JAG
       case Operations::OpType::multiplexer:
-        apply_multimatrix(op.qubits, op.mats); 
+        apply_multiplexer(op.qubits, op.mats); 
         break;
       case Operations::OpType::kraus:
         apply_kraus(op.qubits, op.mats, rng);
@@ -734,11 +732,18 @@ void State<statevec_t>::apply_matrix(const reg_t &qubits, const cmatrix_t &mat) 
   }
 }
 
-// JAG
 template <class statevec_t>
-void State<statevec_t>::apply_multimatrix(const reg_t &qubits, const cmatrix_t &mat, const size_t target_count, const size_t control_count) {
+void State<statevec_t>::apply_multiplexer(const reg_t &qubits, const cmatrix_t &mat) {
   if (qubits.empty() == false && mat.size() > 0) {
-    apply_multimatrix(qubits, Utils::vectorize_matrix(mat), target_count, control_count);
+    size_t exp_target_count, target_count, control_count;
+    double n, base = 2;
+    exp_target_count = mat.GetColumns();
+    n = std::log(exp_target_count)/std::log(base);
+    target_count = std::trunc(n);
+    control_count = qubits.size() - target_count;
+
+    cvector_t vmat = Utils::vectorize_matrix(mat);
+    BaseState::qreg_.apply_multiplexer(qubits, vmat, control_count, target_count);
   }
 }
 
@@ -752,11 +757,6 @@ void State<statevec_t>::apply_matrix(const reg_t &qubits, const cvector_t &vmat)
   }
 }
 
-// JAG
-template <class statevec_t>
-void State<statevec_t>::apply_multimatrix(const reg_t &qubits, const cvector_t &vmat, const size_t target_count, const size_t control_count) {
-    BaseState::qreg_.apply_multimatrix(qubits, vmat, target_count, control_count);
-}
 
 
 template <class statevec_t>
@@ -921,13 +921,13 @@ void State<statevec_t>::apply_initialize(const reg_t &qubits,
 //=========================================================================
 // Implementation: Multiplexer Circuit 
 //=========================================================================
-// JAG 
+
 template <class statevec_t>
-void State<statevec_t>::apply_multimatrix(const reg_t &qubits, const std::vector<cmatrix_t> &mmat) {
+void State<statevec_t>::apply_multiplexer(const reg_t &qubits, const std::vector<cmatrix_t> &mmat) {
 	// Proof-of-concept approach: 
 	// (1) Rearrange qubit indices Identity(target) | Identity(control) ... was control | target
-	// (2) Pack vector of matrices into single (sparse) matrix
-	// (3) Treat as single, large(r), block-diagonal matrix operator
+	// (2) Pack vector of matrices into single (stacked) matrix ... note: matrix dims: rows = DIM[qubit.size()] columns = DIM[|target bits|]
+	// (3) Treat as single, large(r), chained/batched matrix operator
 	
 	
 	// (1) Rearrange qubit indices Identity(target) | Identity(control) ... was control | target
@@ -943,34 +943,11 @@ void State<statevec_t>::apply_multimatrix(const reg_t &qubits, const std::vector
 	for(size_t j = 0; j < control_count; j++)
 		perm_qubits[j+target_count] = qubits[j]; // Control qubits moved to "end" 
 
+	// (2) Pack vector of matrices into single (stacked) matrix ... note: matrix dims: rows = DIM[qubit.size()] columns = DIM[|target bits|]
+	cmatrix_t multiplexer_matrix = Utils::stacked_matrix(mmat);
 
-	// (2) Pack vector of matrices into single (sparse) matrix
-	size_t big_dimension = QV::BITS[qubits.size()];
-	size_t offset_row = 0, offset_col = 0, mmat_number = 0;
-
-        cmatrix_t whopper(big_dimension, big_dimension); 
-
-	for(size_t row = 0; row < big_dimension; row++)  
-		for(size_t col = 0; col < big_dimension; col++)
-			whopper(row, col) = {0.0, 0.0};
-        
-	for(size_t current_block = 0; current_block < mmat.size(); current_block++)
-	{
-		for(size_t row = 0; row < exp_target_count; row++)  
-		{
-			for(size_t col = 0; col < exp_target_count; col++)
-			{
-				whopper(offset_row + row, offset_col + col) = mmat[mmat_number](row, col);
-			}	
-
-		}
-		offset_row+=exp_target_count;
-		offset_col+=exp_target_count;
-		mmat_number++;
-	}
-
-	// (3) Treat as single, large(r), block-diagonal matrix operator
-	apply_matrix(perm_qubits, whopper);
+	// (3) Treat as single, large(r), chained/batched matrix operator
+	apply_multiplexer(perm_qubits, multiplexer_matrix);
 }
 
 
