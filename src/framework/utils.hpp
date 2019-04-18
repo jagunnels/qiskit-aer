@@ -94,8 +94,6 @@ matrix<std::complex<T>> dagger(const matrix<std::complex<T>> &A);
 template <class T>
 matrix<std::complex<T>> conjugate(const matrix<std::complex<T>> &A);
 template<class T>
-//matrix<std::complex<T>> stacked_matrix(const std::vector<cmatrix_t> &mmat);
-//matrix<std::complex<T>> stacked_matrix(const std::vector<matrix<T>> &mmat);
 matrix<T> stacked_matrix(const std::vector<matrix<T>> &mmat);
 
 // Tracing
