@@ -421,14 +421,14 @@ inline Op make_multiplexer(const reg_t &qubits,
                            std::string label = "") {
 
   // Check matrices are N-qubit
-  size_t dim = mats[0].GetRows();
-  size_t num_targets = size_t(std::log2(dim));
+  auto dim = mats[0].GetRows();
+  uint_t num_targets = uint_t(std::log2(dim));
   if (1ULL << num_targets != dim) {
     throw std::invalid_argument("invalid multiplexer matrix dimension.");
   }
   // Check number of matrix compents is power of 2.
   size_t num_mats = mats.size();
-  size_t num_controls = size_t(std::log2(num_mats));
+  uint_t num_controls = uint_t(std::log2(num_mats));
   if (1ULL << num_controls != num_mats) {
     throw std::invalid_argument("invalid number of multiplexer matrices.");
   }
