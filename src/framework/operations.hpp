@@ -501,6 +501,8 @@ Op json_to_op(const json_t &js) {
   // Noise functions
   if (name == "noise_switch")
     return json_to_op_noise_switch(js);
+  if (name == "multiplexer")
+    return json_to_op_multiplexer(js);
   if (name == "kraus")
     return json_to_op_kraus(js);
   if (name == "roerror")
