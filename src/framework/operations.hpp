@@ -25,7 +25,7 @@ namespace Operations {
 // these are used to compare two hexadecimal strings and return a bool
 // for now we only have one comparison Equal, but others will be added
 enum class RegComparison {Equal, NotEqual, Less, LessEqual, Greater, GreaterEqual};
-// JAG
+
 // Enum class for operation types
 enum class OpType {
   gate, measure, reset, bfunc, barrier, snapshot,
@@ -55,7 +55,7 @@ std::ostream& operator<<(std::ostream& stream, const OpType& type) {
   case OpType::matrix:
     stream << "matrix";
     break;
-  case OpType::multiplexer: // JAG
+  case OpType::multiplexer: 
     stream << "multiplexer";
     break;
   case OpType::kraus:
@@ -409,7 +409,7 @@ inline Op make_reset(const reg_t & qubits, uint_t state = 0) {
   op.qubits = qubits;
   return op;
 }
-// JAG
+
 inline Op make_multiplexer(const reg_t &qubits, const std::vector<cmatrix_t> &mats) {
   Op op;
   op.type = OpType::multiplexer;
@@ -696,7 +696,6 @@ Op json_to_op_unitary(const json_t &js) {
   return op;
 }
 
-// JAG -- well, JAG taken from CJW's #Slack 
 Op json_to_op_multiplexer(const json_t &js) {
   Op op;
   op.type = OpType::multiplexer;
